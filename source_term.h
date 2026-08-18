@@ -30,8 +30,8 @@
  *      Compute the source term.
  */
 void ComputePhi(const int tn, const int k, const int j, const int i,
-        const int partn[restrict], const Node *const,
-        const Model *, Real Phi[restrict]);
+        const int partn[RESTRICT], const Node *const,
+        const Model *, Real Phi[RESTRICT]);
 #endif
 /* a good practice: end file with a newline */
 

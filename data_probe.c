@@ -17,6 +17,7 @@
 #include "computational_geometry.h"
 #include "cfd_commons.h"
 #include "commons.h"
+
 /****************************************************************************
  * Function definitions
  ****************************************************************************/
@@ -38,6 +39,12 @@ void WritePointProbeData(const Time *time, const Space *space, const Model *mode
     const IntVec ng = {part->ng[X], part->ng[Y], part->ng[Z]};
     RealVec p1 = {0.0};
     int i = 0, j = 0, k = 0;
+    
+    // --- PADDED STRIDE FIX ---
+    int total_nY = part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN];
+    int total_nX = part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN];
+    // -------------------------
+
     for (int n = 0; n < time->dataN[PROPT]; ++n) {
         snprintf(fname, sizeof(fname), "%s%03d.csv", "point_probe_", n + 1);
         fp = Fopen(fname, "a");
@@ -50,7 +57,9 @@ void WritePointProbeData(const Time *time, const Space *space, const Model *mode
         i = ConfineSpace(MapNode(p1[X], sMin[X], dd[X], ng[X]), nMin[X], nMax[X]);
         j = ConfineSpace(MapNode(p1[Y], sMin[Y], dd[Y], ng[Y]), nMin[Y], nMax[Y]);
         k = ConfineSpace(MapNode(p1[Z], sMin[Z], dd[Z], ng[Z]), nMin[Z], nMax[Z]);
-        idx = IndexNode(k, j, i, part->n[Y], part->n[X]);
+        
+        idx = IndexNode(k, j, i, total_nY, total_nX); // APPLIED FIX
+        
         MapPrimitive(model->gamma, model->gasR, node[idx].U[TO], Uo);
         fprintf(fp, "%.6g, %.6g, %.6g, %.6g, %.6g, %.6g, %.6g\n",
                 time->now, Uo[0], Uo[1], Uo[2], Uo[3], Uo[4], Uo[5]);
@@ -58,6 +67,7 @@ void WritePointProbeData(const Time *time, const Space *space, const Model *mode
     }
     return;
 }
+
 void WriteLineProbeData(const Time *time, const Space *space, const Model *model)
 {
     if (0 == time->dataN[PROLN]) {
@@ -81,6 +91,12 @@ void WriteLineProbeData(const Time *time, const Space *space, const Model *model
     RealVec dl = {0.0};
     int stepN = 0;
     int i = 0, j = 0, k = 0;
+    
+    // --- PADDED STRIDE FIX ---
+    int total_nY = part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN];
+    int total_nX = part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN];
+    // -------------------------
+
     for (int n = 0; n < time->dataN[PROLN]; ++n) {
         snprintf(fname, sizeof(fname), "%s%03d_%05d.csv", "line_probe_", n + 1, time->stepC);
         fp = Fopen(fname, "w");
@@ -100,7 +116,9 @@ void WriteLineProbeData(const Time *time, const Space *space, const Model *model
             i = ConfineSpace(MapNode(p1[X] + m * dl[X], sMin[X], dd[X], ng[X]), nMin[X], nMax[X]);
             j = ConfineSpace(MapNode(p1[Y] + m * dl[Y], sMin[Y], dd[Y], ng[Y]), nMin[Y], nMax[Y]);
             k = ConfineSpace(MapNode(p1[Z] + m * dl[Z], sMin[Z], dd[Z], ng[Z]), nMin[Z], nMax[Z]);
-            idx = IndexNode(k, j, i, part->n[Y], part->n[X]);
+            
+            idx = IndexNode(k, j, i, total_nY, total_nX); // APPLIED FIX
+            
             if (idxOld == idx) {
                 continue;
             }
@@ -116,6 +134,7 @@ void WriteLineProbeData(const Time *time, const Space *space, const Model *model
     }
     return;
 }
+
 void WriteCurveProbeData(const Time *time, const Space *space, const Model *model)
 {
     if (0 == time->dataN[PROCV]) {
@@ -140,6 +159,12 @@ void WriteCurveProbeData(const Time *time, const Space *space, const Model *mode
     RealVec pI = {0.0}; /* image point */
     RealVec N = {0.0}; /* normal */
     int box[DIMS][LIMIT] = {{0}}; /* bounding box in node space */
+    
+    // --- PADDED STRIDE FIX ---
+    int total_nY = part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN];
+    int total_nX = part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN];
+    // -------------------------
+
     for (int n = 0; n < geo->totN; ++n) {
         poly = geo->poly + n;
         snprintf(fname, sizeof(fname), "%s%03d_%05d.csv", "curve_probe_", n + 1, time->stepC);
@@ -153,7 +178,9 @@ void WriteCurveProbeData(const Time *time, const Space *space, const Model *mode
         for (int k = box[Z][MIN]; k < box[Z][MAX]; ++k) {
             for (int j = box[Y][MIN]; j < box[Y][MAX]; ++j) {
                 for (int i = box[X][MIN]; i < box[X][MAX]; ++i) {
-                    idx = IndexNode(k, j, i, part->n[Y], part->n[X]);
+                    
+                    idx = IndexNode(k, j, i, total_nY, total_nX); // APPLIED FIX
+                    
                     if ((1 != node[idx].gst) || (n + 1 != node[idx].did)) {
                         continue;
                     }
@@ -171,6 +198,7 @@ void WriteCurveProbeData(const Time *time, const Space *space, const Model *mode
     }
     return;
 }
+
 void WriteSurfaceForceData(const Time *time, const Space *space, const Model *model)
 {
     if (0 == time->dataN[PROFC]) {

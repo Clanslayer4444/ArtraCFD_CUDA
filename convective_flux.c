@@ -123,4 +123,3 @@ static void InverseProjection(Real R[restrict][DIMU], const Real HhatP[restrict]
     return;
 }
 /* a good practice: end file with a newline */
-

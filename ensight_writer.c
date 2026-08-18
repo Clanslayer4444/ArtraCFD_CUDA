@@ -188,29 +188,35 @@ static void WriteGeometryFile(const Space *space, EnSet *enSet)
 static void WriteStructuredData(const Space *space, const Model *model, EnSet *enSet)
 {
     FILE *fp = NULL;
-    EnReal data = 0.0; /* the Ensight data format */
+    EnReal data = 0.0;
     const Partition *const part = &(space->part);
     const Node *const node = space->node;
-    const Real *restrict U = NULL;
-    int idx = 0; /* linear array index math variable */
+    const Real *RESTRICT U = NULL;
+    int idx = 0;
+
+    #pragma omp parallel for schedule(dynamic)
     for (int s = 0; s < enSet->scaN; ++s) {
-        snprintf(enSet->fname, sizeof(EnStr), "%s.%s", enSet->bname, enSet->sca[s]);
-        fp = Fopen(enSet->fname, "wb");
-        /* first line description per file */
-        strncpy(enSet->str, "scalar variable", sizeof(EnStr));
-        fwrite(enSet->str, sizeof(EnStr), 1, fp);
+        EnStr local_fname, local_str;
+        FILE *fp = NULL;
+        EnReal data = 0.0;
+        const Real *RESTRICT U = NULL;
+        int idx = 0;
+
+        snprintf(local_fname, sizeof(EnStr), "%s.%s", enSet->bname, enSet->sca[s]);
+        fp = Fopen(local_fname, "wb");
+        strncpy(local_str, "scalar variable", sizeof(EnStr));
+        fwrite(local_str, sizeof(EnStr), 1, fp);
         for (int p = enSet->part[MIN], pnum = 1; p < enSet->part[MAX]; ++p, ++pnum) {
-            /* binary file format */
-            strncpy(enSet->str, "part", sizeof(EnStr));
-            fwrite(enSet->str, sizeof(EnStr), 1, fp);
+            strncpy(local_str, "part", sizeof(EnStr));
+            fwrite(local_str, sizeof(EnStr), 1, fp);
             fwrite(&pnum, sizeof(int), 1, fp);
-            strncpy(enSet->str, enSet->dtype, sizeof(EnStr));
-            fwrite(enSet->str, sizeof(EnStr), 1, fp);
+            strncpy(local_str, enSet->dtype, sizeof(EnStr));
+            fwrite(local_str, sizeof(EnStr), 1, fp);
             /* now output the scalar value at each node in current part */
             for (int k = part->ns[p][Z][MIN]; k < part->ns[p][Z][MAX]; ++k) {
                 for (int j = part->ns[p][Y][MIN]; j < part->ns[p][Y][MAX]; ++j) {
                     for (int i = part->ns[p][X][MIN]; i < part->ns[p][X][MAX]; ++i) {
-                        idx = IndexNode(k, j, i, part->n[Y], part->n[X]);
+                        idx = IndexNode(k, j, i, (part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN]), (part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN]));
                         U = node[idx].U[TO];
                         switch (s) {
                             case 0: /* rho */
@@ -260,7 +266,7 @@ static void WriteStructuredData(const Space *space, const Model *model, EnSet *e
                 for (int k = part->ns[p][Z][MIN]; k < part->ns[p][Z][MAX]; ++k) {
                     for (int j = part->ns[p][Y][MIN]; j < part->ns[p][Y][MAX]; ++j) {
                         for (int i = part->ns[p][X][MIN]; i < part->ns[p][X][MAX]; ++i) {
-                            idx = IndexNode(k, j, i, part->n[Y], part->n[X]);
+                            idx = IndexNode(k, j, i, (part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN]), (part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN]));
                             U = node[idx].U[TO];
                             data = U[n] / U[0];
                             fwrite(&data, sizeof(EnReal), 1, fp);

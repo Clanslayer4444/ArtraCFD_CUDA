@@ -29,8 +29,8 @@
  * Function
  *      Reconstruct the numerical convective flux by WENO schemes.
  */
-extern void WENO3(Real F[restrict][DIMU], Real Fhat[restrict]);
-extern void WENO5(Real F[restrict][DIMU], Real Fhat[restrict]);
+extern void WENO3(Real F[RESTRICT][DIMU], Real Fhat[RESTRICT]);
+extern void WENO5(Real F[RESTRICT][DIMU], Real Fhat[RESTRICT]);
 #endif
 /* a good practice: end file with a newline */
 

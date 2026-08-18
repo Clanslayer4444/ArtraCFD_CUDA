@@ -18,6 +18,7 @@
 #include "cfd_parameters.h"
 #include "domain_partition.h"
 #include "commons.h"
+#include "gpu_fluid_dynamics.h"
 /****************************************************************************
  * Static Function Declarations
  ****************************************************************************/
@@ -37,6 +38,9 @@ int Preprocess(Time *time, Space *space, Model *model)
     PartitionDomain(space);
     ShowInfo("  allocating memory...\n");
     AllocateProgramMemory(space, model);
+    /*GPU Init hook*/
+
+    
     ShowInfo("Session");
     return 0;
 }

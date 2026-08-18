@@ -32,7 +32,7 @@ static Real Square(const Real);
  * Jiang, G.S. and Shu, C.W., 1996. Efficient Implementation of Weighted
  * ENO Schemes. Journal of Computational Physics, 126(1), pp.202-228.
  */
-void WENO3(Real F[restrict][DIMU], Real Fhat[restrict])
+void WENO3(Real F[RESTRICT][DIMU], Real Fhat[RESTRICT])
 {
     Real omega[R]; /* weights */
     Real q[R]; /* q vectors */

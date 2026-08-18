@@ -11,13 +11,22 @@
 /****************************************************************************
  * Required Header Files
  ****************************************************************************/
-#include "program_entrance.h"
-#include <stdio.h> /* standard library for input and output */
-#include <stdlib.h> /* dynamic memory allocation and exit */
-#include <string.h> /* manipulating strings */
+extern "C" {
+#include "commons.h"
+#include "cfd_commons.h"
+#include "preprocess.h"
+#include "postprocess.h"
 #include "calculator.h"
 #include "case_generator.h"
-#include "commons.h"
+#include "linear_system.h"
+}
+
+#ifdef MPI_ENABLED
+#include "mpi_interface.h"
+#endif
+
+#include <cuda_runtime.h>
+
 /****************************************************************************
  * Static Function Declarations
  ****************************************************************************/
@@ -27,24 +36,13 @@ static void ShowManual(void);
 /****************************************************************************
  * Function Definitions
  ****************************************************************************/
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int EnterProgram(int argc, char *argv[], Control *control, Space *space)
 {
-    /*
-     * Loop through command line to process options
-     * The procedure main takes two arguments: argc and argv. The parameter
-     * argc is the number of arguments on the command line (including the
-     * program name). The array argv contains the actual arguments.
-     * A standard command-line format has the form:
-     * command options file1 file2 file3 ...
-     * Options are preceded by a dash (-) and are usually a single letter.
-     * If the option takes a parameter, it follows the letter with a space.
-     * A while loop is used to cycle through the command-line options.
-     * One argument always exists: the program name. The expression
-     * (argc > 1) checks for additional arguments. The first one is
-     * numbered 1. The first character of the first argument is argv[1][0].
-     * If this is a dash, there is an option. The switch statement is used
-     * to decode the options.
-     */
     while ((1 < argc) && ('-' == argv[1][0])) { /* options present */
         if (3 > argc) { /* not enough arguments */
             ShowError("empty entry after: %s\n", argv[1]);
@@ -100,6 +98,11 @@ int EnterProgram(int argc, char *argv[], Control *control, Space *space)
     ConfigureProgram(control, space);
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif
+
 static void ConfigureProgram(Control *control, Space *space)
 {
     Partition *const part = &(space->part);
@@ -116,16 +119,67 @@ static void ConfigureProgram(Control *control, Space *space)
         case 'o': /* omp mode */
             /* fall through */
         case 'm': /* mpi mode */
+        {
+            #ifdef MPI_ENABLED
+            extern int ARTRACFD_MPI_NPROCS;
+            /* Use MPI to determine processor count */
+            int nprocs = ARTRACFD_MPI_NPROCS;
+            if (nprocs > 1) {
+                /* Distribute over Y dimension (slab decomposition) */
+                part->proc[X] = 1;
+                part->proc[Y] = nprocs;
+                part->proc[Z] = 1;
+                part->procN = nprocs;
+                printf("  >> MPI subdomain decomposition: %d slabs along Y\n", nprocs);
+            } else {
+                part->proc[X] = 1;
+                part->proc[Y] = 1;
+                part->proc[Z] = 1;
+                part->procN = 1;
+            }
+            #else
+            /* Fallback if MPI not compiled in */
             part->proc[X] = control->proc[X];
             part->proc[Y] = control->proc[Y];
             part->proc[Z] = control->proc[Z];
             part->procN = control->proc[X] *
                 control->proc[Y] * control->proc[Z];
+            #endif
             break;
+        }
         case 'g': /* gpu mode */
-            break;
-        default:
-            break;
+        {
+            part->proc[X] = control->proc[X];
+            part->proc[Y] = control->proc[Y];
+            part->proc[Z] = control->proc[Z];
+            part->procN = control->proc[X] *
+                          control->proc[Y] * control->proc[Z];
+
+            int deviceCount = 0;
+            cudaError_t err = cudaGetDeviceCount(&deviceCount);
+            if (err != cudaSuccess || deviceCount == 0) {
+                fprintf(stderr, "No CUDA-capable GPU detected!\n");
+                exit(EXIT_FAILURE);
+            }
+
+            printf("\n>> HPC Hardware Scan: Found %d CUDA GPUs on this node.\n", deviceCount);
+
+            if (part->procN > 1) {      
+                printf(">> WARNING: You requested %d partitions (-n), but the solver is currently running as a single-host process.\n", part->procN);
+                printf(">> Single-Node Multi-GPU requires MPI integration or OpenMP host-threading. Defaulting to Device 0.\n");
+            }
+
+            int device = 0;  
+            cudaDeviceProp prop;
+            cudaGetDeviceProperties(&prop, device);
+
+            cudaSetDevice(device);
+            printf(">> GPU mode enabled: Locked to device %d (%s)\n", device, prop.name);
+            printf(">> Cores: %d SMs | Memory: %.1f GB\n", 
+                   prop.multiProcessorCount, 
+                   prop.totalGlobalMem / (1024.0 * 1024.0 * 1024.0));
+        }
+        break;
     }
     return;
 }
@@ -195,4 +249,3 @@ static void ShowManual(void)
     return;
 }
 /* a good practice: end file with a newline */
-

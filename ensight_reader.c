@@ -68,7 +68,7 @@ static void ReadStructuredData(Space *space, const Model *model, EnSet *enSet)
     EnReal data = 0.0; /* the Ensight data format */
     const Partition *const part = &(space->part);
     Node *const node = space->node;
-    Real *restrict U = NULL;
+    Real *RESTRICT U = NULL;
     int idx = 0; /* linear array index math variable */
     for (int s = 0; s < enSet->scaN; ++s) {
         snprintf(enSet->fname, sizeof(EnStr), "%s.%s", enSet->bname, enSet->sca[s]);
@@ -81,7 +81,7 @@ static void ReadStructuredData(Space *space, const Model *model, EnSet *enSet)
             for (int k = part->ns[PAL][Z][MIN]; k < part->ns[PAL][Z][MAX]; ++k) {
                 for (int j = part->ns[PAL][Y][MIN]; j < part->ns[PAL][Y][MAX]; ++j) {
                     for (int i = part->ns[PAL][X][MIN]; i < part->ns[PAL][X][MAX]; ++i) {
-                        idx = IndexNode(k, j, i, part->n[Y], part->n[X]);
+                        idx = IndexNode(k, j, i, (part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN]), (part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN]));
                         if (0 == s) {
                             /* geometric field initializer */
                             node[idx].did = NONE;

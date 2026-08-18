@@ -37,7 +37,8 @@ extern void ComputeGeometricField(Space *, const Model *);
  *      Apply boundary conditions and treatments for immersed boundaries.
  */
 extern void TreatImmersedBoundary(const int tn, Space *, const Model *);
-extern void DoMethodOfImage(const Real UoI[restrict], const Real UoO[restrict], Real UoG[restrict]);
+extern void DoMethodOfImage(const Real UoI[RESTRICT], const Real UoO[RESTRICT], Real UoG[RESTRICT]);
+void BuildIBMMap(Space *space, const Model *model);
 #endif
 /* a good practice: end file with a newline */
 

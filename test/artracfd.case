@@ -1,0 +1,199 @@
+#------------------------------------------------------------------------------
+#                                                                             -
+#                    Case Configuration for ArtraCFD                          -
+#                                                                             -
+# - Coordinate system: Right-handed Cartesian system. X-Y plane is the screen -
+#   plane; X is horizontal from west to east; Y is vertical from south to     -
+#   north; Z axis is perpendicular to screen and points from front to back.   -
+# - Physical quantities are SI Unit based. Data are float type if no specific -
+#   information is given. Floats can be exponential notation of 'e'.          -
+# - In each 'begin end' environment, there should NOT be any empty or comment -
+#   lines. Please double check input.                                         -
+#                                                                             -
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+#
+#                          >> Space Domain <<
+#
+#------------------------------------------------------------------------------
+space begin
+-1.5, -3, -0.001         # xmin, ymin, zmin
+3, 3, 0.001            # xmax, ymax, zmax (max > min)
+800, 800, 1        # mx, my, mz (int; 1: dimension collapse)
+space end
+#------------------------------------------------------------------------------
+#
+#                          >> Time Domain <<
+#
+#------------------------------------------------------------------------------
+time begin
+0                  # restart data checkpoint (int; 0: none)
+0.6                # termination time
+1.2                # CFL condition number in (0, 2]
+0                  # maximum computing steps (int; 0: auto)
+10                  # space data writing frequency (int; 0: inf)
+1                  # data streamer (int; 0: ParaView; 1: Ensight)
+time end
+#------------------------------------------------------------------------------
+#
+#                        >> Numerical Method <<
+#
+#------------------------------------------------------------------------------
+numerical begin
+1                  # temporal scheme (int; 0: RK2; 1: RK3;)
+1                  # spatial scheme (int; 0: WENO3; 1: WENO5;)
+0                  # dimension scheme (int; 0: dim split; 1: dim by dim)
+0                  # Jacobian average (int; 0: Arithmetic; 1: Roe)
+0                  # flux splitting method (int; 0: LLF; 1: SW)
+0                  # phase interaction (int; 0: F; 1: FSI; 2: FSI+SSI)
+1                  # ibm reconstruction layers (int; 0: inf)
+numerical end
+#------------------------------------------------------------------------------
+#
+#                        >> Material Properties <<
+#
+#------------------------------------------------------------------------------
+material begin
+0                  # material type (int; 0: gas; 1: water; 2: solid)
+1                  # viscous level (0: none; 1: normal)
+0                  # gravity state (int; 0: off; 1: on)
+0, -9.806, 0       # gravity vector
+material end
+#------------------------------------------------------------------------------
+#
+#                        >> Reference Values  <<
+#
+#------------------------------------------------------------------------------
+reference begin
+1                  # length
+1                  # density
+1                  # velocity
+1                  # temperature
+reference end
+#------------------------------------------------------------------------------
+#
+#                             >> Note <<
+#
+# Physical quantities below should be normalized by the reference values.
+#------------------------------------------------------------------------------
+#
+#                         >> Initialization <<
+#
+#------------------------------------------------------------------------------
+initialization begin
+1                  # density expression
+0                  # x velocity expression
+0                  # y velocity expression
+0                  # z velocity expression
+1                  # pressure expression
+initialization end
+#------------------------------------------------------------------------------
+#
+#                        >> Boundary Condition <<
+#
+# Available types: [inflow], [outflow], [slip wall], [noslip wall], [periodic]
+#------------------------------------------------------------------------------
+#west boundary begin
+#inflow            # boundary type
+#1                 # density
+#1                 # x velocity
+#0                 # y velocity
+#0                 # z velocity
+#1                 # pressure
+#west boundary end
+#
+west boundary begin
+outflow            # boundary type
+west boundary end
+#
+east boundary begin
+outflow            # boundary type
+east boundary end
+#
+south boundary begin
+slip wall          # boundary type
+-1                 # temperature (<0: adiabatic)
+south boundary end
+#
+north boundary begin
+slip wall          # boundary type
+-1                 # temperature (<0: adiabatic)
+north boundary end
+#
+front boundary begin
+outflow            # boundary type
+front boundary end
+#
+back boundary begin
+outflow            # boundary type
+back boundary end
+#------------------------------------------------------------------------------
+#
+#                  >> Regional Initialization <<
+#
+#Available options:
+#[plane]:          to region on the direction of normal vector
+#[sphere]:         to region in the sphere
+#[box]:            to region in the box
+#[cylinder]:       to region in the cylinder
+#------------------------------------------------------------------------------
+#
+plane initialization begin
+-0.5, 0, 0           # x, y, z of a plane point
+-1, 0, 0           # normal vector of plane
+3.67372            # density expression
+2.41981            # x velocity expression
+0                  # y velocity expression
+0                  # z velocity expression
+9.04545            # pressure expression
+plane initialization end
+#
+plane initialization begin
+-0.5, 0, 0           # x, y, z of a plane point
+1, 0, 0            # normal vector of plane
+1                  # density expression
+0                  # x velocity expression
+0                  # y velocity expression
+0                  # z velocity expression
+1                  # pressure expression
+plane initialization end
+#
+#sphere initialization begin
+#0, 0, 0           # x, y, z of sphere center
+#0.1               # radius of sphere
+#1                 # density expression
+#0                 # x velocity expression
+#0                 # y velocity expression
+#0                 # z velocity expression
+#1000              # pressure expression
+#sphere initialization end
+#
+#box initialization begin
+#0, 0, 0           # xmin, ymin, zmin of box
+#0.1, 0.1, 0.1     # xmax, ymax, zmax of box
+#1                 # density expression
+#0                 # x velocity expression
+#0                 # y velocity expression
+#0                 # z velocity expression
+#1000              # pressure expression
+#box initialization end
+#
+#cylinder initialization begin
+#0, 0, -0.2        # x1, y1, z1 of center
+#0, 0, 0.2         # x2, y2, z2 of center
+#0.1               # radius of cylinder
+#1                 # density expression
+#0                 # x velocity expression
+#0                 # y velocity expression
+#0                 # z velocity expression
+#1000              # pressure expression
+#cylinder initialization end
+#------------------------------------------------------------------------------
+#
+#                    >> Field Data Probes <<
+#
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+#/* a good practice: end file with a newline */
+

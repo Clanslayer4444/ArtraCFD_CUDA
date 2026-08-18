@@ -1,289 +1,148 @@
 #***************************************************************************#
 #                          ArtraCFD Makefile                                #
-#                          <By Huangrui Mo>                                 #
-# Copyright (C) Huangrui Mo <huangrui.mo@gmail.com>                         #
-# This file is part of ArtraCFD.                                            #
-# ArtraCFD is free software: you can redistribute it and/or modify it       #
-# under the terms of the GNU General Public License as published by         #
-# the Free Software Foundation, either version 3 of the License, or         #
-# (at your option) any later version.                                       #
+#                          (Multi-Architecture Build)                       #
 #***************************************************************************#
 
-#***************************************************************************#
-# Options:
-# 'make' or 'make all'  build executable file
-# 'make install'        build executable file and install
-# 'make uninstall'      uninstall
-# 'make clean'          remove objects, dependency and executable files
-#
-# Use 'cat -e -t -v Makefile' to show the presence of tabs with ^I and
-# line endings with $, which are vital to ensure that dependencies end
-# properly and tabs mark the action for the rules.
-#
-#***************************************************************************#
-
-#***************************************************************************#
-#
-#                           System Configuration
-#
-#***************************************************************************#
-
-#
-# Shell
-#
 SHELL := /bin/bash
-
-#
-# Installer
-#
 INSTALL := install
 INSTALLDATA := $(INSTALL) -m 644
-
-#
-# Prefix for each installed program
-#
-#    e.g., prefix = /usr/local
-#
 prefix = ~
-
-#
-# The directory to install binary executable program
-#
 bindir = $(prefix)/Bin
-
-#
-# The directory to install the info files in.
-#
-infodir = $(bindir)/info
-
-#
-# Define the executable program name
-#
 BINNAME := artracfd
-
-#
-# Path to the source directory, relative to the makefile
-#
 srcdir = .
 
-#***************************************************************************#
-#
-#                          Compiler Configuration
-#
-#***************************************************************************#
+#============================================================================#
+# Build Configuration                                                        #
+#   BUILD=cpu    - CPU-only, no CUDA dependency                              #
+#   BUILD=gpu    - Single-GPU accelerated (C with CUDA kernels)              #
+#   BUILD=hpc    - MPI + GPU (Multi-CPU + 1 GPU)                            #
+#============================================================================#
+BUILD ?= gpu
 
-#
-# Define the compiler
-#
-#    gcc        GNU C compiler
-#    icc        Intel C compiler
-#    mpicc      MPI compiler
-#
+#============================================================================#
+# Compilers                                                                  #
+#============================================================================#
 CC := gcc
+CXX := g++
+NVCC := nvcc
+MPICC ?= mpicc
 
-#
-# Define compiler flags
-#   This flag affects all C compilations uniformly, include implicit rules.
-#
-#  Shared compiler flags
-#    -Wall     Turn on all warnings
-#    -Wextra   More restricted warnings
-#    -std=c99 -pedantic  Use ANSI C standard
-#    -g        Enable debugging
-#    -O0       No optimization; generates unoptimized code for debugging purposes.
-#    -O2       Recommended optimization; generates well optimized code.
-#    -O3       Aggressive optimization; should be validated and compared with -O2.
-#  GCC compiler flags
-#    -fstrict-aliasing  Assume the strictest aliasing rules for type optimizations.
-#    -Og       Enables optimizations that do not interfere with debugging.
-#    -fopenmp  Enable openmp
-#  ICC compiler flags
-#    -ansi-alias  Assume the strictest aliasing rules for type optimizations.
-#    -no-prec-div Enable optimizations for division.
-#    -ipo      Enable cross-file optimization such as cross-file inlining.
-#    -fast     Enable processor specific optimization and will fail for inconsistency.
-#    -qopenmp  Enable openmp
-#  Use Valgrind for memory access check (http://valgrind.org/)
-#    -g -O0    Use this flag to compile the program, then run command line
-#    valgrind --leak-check=full --track-origins=yes ./artracfd -m arg
-#  Use Valgrind for cache missing check (http://valgrind.org/)
-#    -g -O2    Use this flag to compile the program, then run command line
-#    valgrind --tool=cachegrind ./artracfd -m arg
-#  Use google-perftools for performance check (https://github.com/gperftools/gperftools)
-#    sudo apt-get install google-perftools libgoogle-perftools-dev
-#    -g        Enable debugging to compile the program, then run command line
-#    LD_PRELOAD=/usr/lib/libprofiler.so CPUPROFILE=./cpuprof ./artracfd -m arg
-#    google-pprof ./artracfd ./cpuprof      (call-graph terminal)
-#  Enable floating-point exception handling to debug algorithm
-#    trapfpe.c  Add into source code
-#    -g  -O0    Use this flag to compile the program
-#    gdb ./artracfd
-#    (gdb) run -m serial
-#    where      Show trace information
-#
-ifeq ($(CC),icc)
-    CFLAGS += -Wall -Wextra -O2 -ansi-alias -std=c99 -pedantic
-else
-    CFLAGS += -Wall -Wextra -O2 -fstrict-aliasing -std=c99 -pedantic
+#------------------ Base Flags ------------------#
+CFLAGS    := -Wall -Wextra -O2 -std=c99 -pedantic
+CXXFLAGS  := -Wall -Wextra -O2 -std=c++11
+NVCCFLAGS := -O2 -std=c++11 -rdc=true
+INCLUDES  :=
+LFLAGS    :=
+LIBS      := -lm
+
+#------------------ Architecture Flags ------------------#
+# CPU only
+CFLAGS_cpu    := $(CFLAGS) -fopenmp
+NVCCFLAGS_cpu :=
+LFLAGS_cpu    :=
+LIBS_cpu      := -lm -lgomp
+
+# GPU accelerated
+CFLAGS_gpu    := $(CFLAGS) -DCUDA_ENABLED -fopenmp
+NVCCFLAGS_gpu := $(NVCCFLAGS) -DCUDA_ENABLED
+LFLAGS_gpu    := -L/usr/local/cuda/lib64
+LIBS_gpu      := -lm -lcudart -lgomp
+
+# HPC: MPI + GPU
+CFLAGS_hpc    := $(CFLAGS) -DCUDA_ENABLED -DMPI_ENABLED -fopenmp
+NVCCFLAGS_hpc := $(NVCCFLAGS) -DCUDA_ENABLED -DMPI_ENABLED
+LFLAGS_hpc    := -L/usr/local/cuda/lib64
+# MPI C++ linker needed for CUDA + MPI combined builds
+MPICXX       ?= mpicxx
+LIBS_hpc      := -lm -lcudart -lgomp
+
+#------------------ Select active flags ------------------#
+CFLAGS_ARCH    := $(CFLAGS_$(BUILD))
+NVCCFLAGS_ARCH := $(NVCCFLAGS_$(BUILD))
+LFLAGS_ARCH    := $(LFLAGS_$(BUILD))
+LIBS_ARCH      := $(LIBS_$(BUILD))
+
+#------------------ Source Files ------------------#
+SRCS_C   := $(wildcard *.c)
+SRCS_CU  := program_entrance.cu linear_system_gpu.cu gpu_fluid_dynamics.cu \
+            gpu_state.cu gpu_convective_flux.cu gpu_eigen.cu \
+            gpu_diffusive_flux.cu gpu_ibm.cu
+
+# MPI interface included only for hpc build
+ifeq ($(BUILD),hpc)
+    SRCS_C += mpi_interface.c
 endif
 
-#
-# Preprocessor options
-#
-CPPFLAGS +=
+SRCS     := $(SRCS_C) $(SRCS_CU)
+OBJS_C   := $(SRCS_C:.c=.o)
+OBJS_CU  := $(SRCS_CU:.cu=.o)
+OBJS     := $(OBJS_C) $(OBJS_CU)
+CLEANLIST := $(OBJS) $(BINNAME)
 
-#
-# Switch intelcc and gnu module
-#
-#  When using gcc to compile, it is common to see an error related to
-#  <math.h>. This error occurs because the intelcc module is loaded
-#  and is pointing to the intel version of math.h. The Intel version
-#  of math.h does not work with the gcc compiler. There are two simple
-#  workarounds to fix this problem:
-#    Exclusively use icc to compile your jobs.
-#    Unload intelcc and load gcc module
-#      module unload intelcc
-#      module load gcc
-#
+#------------------ Linker ------------------#
+# For hpc, use MPI C++ linker to handle CUDA + MPI symbol resolution
+ifeq ($(BUILD),hpc)
+    LINKER    := $(MPICXX)
+    LINKFLAGS := $(NVCCFLAGS_ARCH) $(LFLAGS_ARCH)
+    LINKLIBS  := $(LIBS_ARCH)
+else ifeq ($(BUILD),gpu)
+    LINKER    := $(NVCC)
+    LINKFLAGS := $(NVCCFLAGS_ARCH) $(LFLAGS_ARCH)
+    LINKLIBS  := $(LIBS_ARCH)
+else
+    LINKER    := $(CC)
+    LINKFLAGS := $(CFLAGS_ARCH) $(INCLUDES) $(LFLAGS_ARCH)
+    LINKLIBS  := $(LIBS_ARCH)
+endif
 
-#
-# Define any directories containing header files other than /usr/include
-#
-#    e.g., INCLUDES = -I/home/auxiliary/include  -I./include
-#
-INCLUDES :=
+#============================================================================#
+# Build Rules                                                                #
+#============================================================================#
+.PHONY: all install uninstall clean test_verify
 
-#
-# Define library paths in addition to /usr/lib
-#    If wanted libraries not in /usr/lib, specify their path using -Lpath
-#
-#    e.g., LFLAGS = -L/home/auxiliary/lib  -L./lib
-#
-LFLAGS :=
-
-#
-# Define any libraries to link into executable, use the -llibname option
-#
-LIBS := -lm
-
-#***************************************************************************#
-#
-#                             Make Configuration
-#
-#***************************************************************************#
-
-#
-# Define the C source files
-#
-SRCS := $(wildcard *.c)
-
-#
-# Define the C object files
-#    This uses Suffix Replacement within a macro:
-#    $(name:string1=string2)
-#    For each word in 'name' replace 'string1' with 'string2'
-#    Below we are replacing the suffix .c of all words in the macro SRCS
-#    with the .o suffix
-#
-OBJS := $(SRCS:.c=.o)
-
-#
-# Search path for make program
-#   make uses VPATH as a search list for both
-#   prerequisites and targets of rules.
-#
-VPATH :=
-
-#
-# Clean list
-#
-CLEANLIST += $(OBJS) $(BINNAME)
-
-#***************************************************************************#
-#
-#                                 Build
-#
-#***************************************************************************#
-
-#
-# all
-#
-.PHONY: all
 all: $(BINNAME)
-	@echo  $(BINNAME) has been compiled
+	@echo "  ArtraCFD built: BUILD=$(BUILD)"
 
-#
-# install
-#
-.PHONY: install
-install:
-	@echo "Creating directories"
-	@mkdir -p $(bindir)
-	@mkdir -p $(infodir)
-	@echo "Installing to $(bindir)/$(BINNAME)"
-	@$(INSTALL) $(BINNAME) $(bindir)/$(BINNAME)
-	@$(INSTALLDATA) $(srcdir)/Makefile $(infodir)
-
-#
-# uninstall
-#
-.PHONY: uninstall
-uninstall:
-	@echo "Removing  $(bindir)/$(BINNAME)"
-	@$(RM)  $(bindir)/$(BINNAME)
-
-#
-# Invoke object files
-#
 $(BINNAME): $(OBJS)
-	$(CC) $(CFLAGS) $(INCLUDES) $(CPPFLAGS) -o $@ $(OBJS) $(LFLAGS) $(LIBS)
+	$(LINKER) $(LINKFLAGS) -o $@ $(OBJS) $(LINKLIBS)
 
-#
-# Static pattern rule for automatic prerequisite generation
-#
-DPND := $(SRCS:.c=.d)
+%.o: %.c
+	$(CC) $(CFLAGS_ARCH) $(INCLUDES) -c -o $@ $<
 
-# Automatic prerequisites flag: -M for any compiler, -MM for GNU to
-# omit system headers. But -MM usually work with ICC without problem.
-ifeq ($(CC),icc)
-    AUTOPRE := -MM
-else
-    AUTOPRE := -MM
-endif
+%.o: %.cu
+	$(NVCC) $(NVCCFLAGS_ARCH) -c -o $@ $<
+
+install: $(BINNAME)
+	@mkdir -p $(bindir)
+	$(INSTALL) $(BINNAME) $(bindir)/$(BINNAME)
+
+uninstall:
+	$(RM) $(bindir)/$(BINNAME)
+
+clean:
+	@echo "  cleaning..."
+	@- $(RM) $(CLEANLIST)
+
+#============================================================================#
+# Verification Test                                                          #
+#============================================================================#
+test_verify: $(BINNAME)
+	@echo "  Running CPU-vs-GPU verification..."
+	cd test && bash run_verify.sh
+
+#============================================================================#
+# Dependency Generation (C files)                                            #
+#============================================================================#
+DPND := $(SRCS_C:.c=.d)
 
 $(DPND): %.d: %.c
 	@set -e; rm -f $@; \
-		$(CC) $(AUTOPRE) $(CPPFLAGS) $< > $@.$$$$; \
+		$(CC) -MM $(CPPFLAGS) $< > $@.$$$$; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 
-# Include generated dependencies. Extra spaces are allowed and ignored
-# at the beginning of the include line, but the first character must
-# NOT be a tab
 ifneq ($(MAKECMDGOALS),clean)
-    -include ${DPND}
+    -include $(DPND)
 endif
 
-# add dependency files to clean list
 CLEANLIST += $(DPND)
-
-#
-# Build object files
-#   object files can be built by the automatically generated
-#   prerequisites through implicit rules. Generally,
-#   to specify additional prerequisites, such as header files,
-#   implicit rules are more desirable.
-#
-
-#
-# clean
-#   When a line starts with ‘@’, the echoing of that line
-#   itself is suppressed.
-#   a '-' flag makes errors to be ignored
-#
-.PHONY: clean
-clean:
-	@echo  cleaning...
-	@- $(RM) $(CLEANLIST)
-
-#***************************************************************************#

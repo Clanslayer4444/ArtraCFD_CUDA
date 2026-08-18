@@ -18,16 +18,17 @@
 #include "boundary_treatment.h"
 #include "cfd_commons.h"
 #include "commons.h"
-/****************************************************************************
- * Function Pointers
- ****************************************************************************/
+
+#ifdef MPI_ENABLED
+#include <mpi.h>
+#endif
+
 typedef void (*TimeIntegrator)(const Real, const int, Space *, const Model *);
-/****************************************************************************
- * Static Function Declarations
- ****************************************************************************/
+
 static void DiscretizeTime(const Real, const int, Space *, const Model *);
 static void RungeKutta2(const Real, const int, Space *, const Model *);
 static void RungeKutta3(const Real, const int, Space *, const Model *);
+static void RungeKutta3_MPI(const Real, const int, Space *, const Model *);
 static void LLLU(const Real, const Real, const Real, const int,
         const int, const int, const int, Space *, const Model *);
 static void LU(const Real [restrict], const Real [restrict],
@@ -35,23 +36,11 @@ static void LU(const Real [restrict], const Real [restrict],
 static void SolveOperator(const int, const int, const Real, const Real,
         const Real [restrict], const Real [restrict], Real [restrict], const Real,
         const Real [restrict]);
-/****************************************************************************
- * Global Variables Definition with Private Scope
- ****************************************************************************/
+
 static TimeIntegrator IntegrateTime[2] = {
     RungeKutta2,
     RungeKutta3};
-/****************************************************************************
- * Function definitions
- ****************************************************************************/
-/*
- * dU/dt = LU = LxU + LyU + LzU + Phi(U)
- * Time and space discretizations are implemented under the method of lines.
- * Operator splitting is used to treat equation with source terms.
- * Multi-dimensionality is addressed by two approaches
- *   a) - operator splitting
- *   b) - operator-by-operator approximation
- */
+
 void EvolveFluidDynamics(const Real dt, Space *space, const Model *model)
 {
     if (0 != model->sState) {
@@ -114,77 +103,125 @@ void EvolveFluidDynamics(const Real dt, Space *space, const Model *model)
     }
     return;
 }
-/*
- * dU/dt = LU
- * Computation must start from TO data space and end with TO data space.
- */
+
 static void DiscretizeTime(const Real dt, const int s, Space *space, const Model *model)
 {
     IntegrateTime[model->tScheme](dt, s, space, model);
     return;
 }
+
+/* ------------------------------------------------------------
+ * Run Mode dispatch
+ * ------------------------------------------------------------ */
+extern int ARTRACFD_RUNMODE;
+
+#ifdef CUDA_ENABLED
+extern void LaunchRK3FullStep(int s, int nx, int ny, int nz, Real dt, Real ds, 
+    Real gamma, Real gasR, Real refMu, Real refT, Real Prandtl, 
+    const Partition *part, const Model *model);
+#endif
+
 static void RungeKutta2(const Real dt, const int s, Space *space, const Model *model)
 {
-    /* solve U1 = LLLU = 0.0 * Un + 1.0 * LLUn */
     LLLU(dt, 0.0, 1.0, TO, TO, TN, s, space, model);
     TreatBoundary(TN, space, model);
-    /* solve U(n+1) = LLLU = 1.0/2.0 * Un + 1.0/2.0 * LLU1 */
     LLLU(dt, 1.0/2.0, 1.0/2.0, TO, TN, TO, s, space, model);
     TreatBoundary(TO, space, model);
-    return;
 }
+
+/*
+ * RK3 integration with MPI+GPU support.
+ *
+ * Mode dispatch:
+ *   ARTRACFD_RUNMODE == 1 : GPU-only (single process, full domain on GPU)
+ *   ARTRACFD_RUNMODE == 2 : MPI+GPU (rank 0 drives GPU, all ranks for I/O)
+ *   otherwise             : CPU-only (original serial logic)
+ */
 static void RungeKutta3(const Real dt, const int s, Space *space, const Model *model)
 {
-    /* solve U1 = LLLU = 0.0 * Un + 1.0 * LLUn */
+    const int is_mpi_gpu = (ARTRACFD_RUNMODE == 2);
+
+#ifdef MPI_ENABLED
+    int mpi_rank = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+#else
+    const int mpi_rank = 0;
+#endif
+
+    if (is_mpi_gpu) {
+        /* MPI+GPU mode: only rank 0 runs the GPU kernels */
+#ifdef MPI_ENABLED
+        if (mpi_rank == 0) {
+#endif
+#ifdef CUDA_ENABLED
+            const Partition *part = &(space->part);
+            int full_nx = part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN];
+            int full_ny = part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN];
+            int full_nz = part->ns[PAL][Z][MAX] - part->ns[PAL][Z][MIN];
+
+            LaunchRK3FullStep(s, full_nx, full_ny, full_nz, dt, part->dd[s], 
+                model->gamma, model->gasR, model->refMu, model->refT, 0.71, part, model);
+#endif
+#ifdef MPI_ENABLED
+        }
+        /* Synchronize all ranks after GPU computation */
+        MPI_Barrier(MPI_COMM_WORLD);
+#endif
+        return;
+    }
+
+#ifdef CUDA_ENABLED
+    if (ARTRACFD_RUNMODE == 1) {
+        const Partition *part = &(space->part);
+        int full_nx = part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN];
+        int full_ny = part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN];
+        int full_nz = part->ns[PAL][Z][MAX] - part->ns[PAL][Z][MIN];
+
+        LaunchRK3FullStep(s, full_nx, full_ny, full_nz, dt, part->dd[s], 
+            model->gamma, model->gasR, model->refMu, model->refT, 0.71, part, model);
+        return;
+    }
+#endif
+
+    /* CPU-only RK3 */
     LLLU(dt, 0.0, 1.0, TO, TO, TN, s, space, model);
     TreatBoundary(TN, space, model);
-    /* solve U2 = LLLU = 3.0/4.0 * Un + 1.0/4.0 * LLU1 */
     LLLU(dt, 3.0/4.0, 1.0/4.0, TO, TN, TM, s, space, model);
     TreatBoundary(TM, space, model);
-    /* solve U(n+1) = LLLU = 1.0/3.0 * Un + 2.0/3.0 * LLU2 */
     LLLU(dt, 1.0/3.0, 2.0/3.0, TO, TM, TO, s, space, model);
     TreatBoundary(TO, space, model);
-    return;
 }
-/*
- * Spatial operator computation.
- * LLLU = coeA * Un + coeB * LLU; LLU = (I + dt*L)U; L = {Ls, phi}; s = X, Y, Z.
- * Strategy for general coding: use p as operator identifier, use general
- * algorithms and function pointers to unify the function and code for each
- * value of p. If a function is too difficult to do general coding, then code
- * functions for each operator individually.
- */
+
 static void LLLU(const Real dt, const Real coeA, const Real coeB, const int to,
         const int tn, const int tm, const int p, Space *space, const Model *model)
 {
     const Partition *const part = &(space->part);
     Node *const node = space->node;
-    int idx = 0; /* linear array index math variable */
-    int i = 0, j = 0, k = 0; /* index with normal order */
-    const int h[DIMS][DIMS] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}; /* direction indicator */
-    Real RHS[5][DIMU] = {{0.0}}; /* spatial operator */
-    Real *restrict FhatR = RHS[0]; /* reconstructed numerical convective flux vector */
-    Real *restrict FhatL = RHS[1]; /* reconstructed numerical convective flux vector */
-    Real *restrict FvhatR = RHS[2]; /* reconstructed numerical diffusive flux vector */
-    Real *restrict FvhatL = RHS[3]; /* reconstructed numerical diffusive flux vector */
-    Real *restrict Phi = RHS[4]; /* right hand side vector */
+    int idx = 0; 
+    int i = 0, j = 0, k = 0;
+    const int h[DIMS][DIMS] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    Real RHS[5][DIMU] = {{0.0}}; 
+    Real *restrict FhatR = RHS[0]; 
+    Real *restrict FhatL = RHS[1]; 
+    Real *restrict FvhatR = RHS[2]; 
+    Real *restrict FvhatL = RHS[3]; 
+    Real *restrict Phi = RHS[4]; 
     Real *temp = NULL;
     const IntVec partn = {part->n[X], part->n[Y], part->n[Z]};
     const RealVec dd = {part->dd[X], part->dd[Y], part->dd[Z]};
     const RealVec r = {dt * dd[X], dt * dd[Y], dt * dd[Z]};
-    int s = 0, sN = 0; /* space sweep control for the operator p */
+    int s = 0, sN = 0; 
     switch (p) {
-        case PHI: /* source term */
+        case PHI: 
             s = 0; sN = s + 1;
             break;
-        case DIMS: /* all spatial operators */
+        case DIMS: 
             s = 0; sN = DIMS;
             break;
-        default: /* individual spatial operator */
+        default: 
             s = p; sN = s + 1;
             break;
     }
-    /* space sweep with dimension priority */
     for (; s < sN; ++s) {
         for (int ks = part->np[s][Z][MIN]; ks < part->np[s][Z][MAX]; ++ks) {
             for (int js = part->np[s][Y][MIN]; js < part->np[s][Y][MAX]; ++js) {
@@ -204,7 +241,7 @@ static void LLLU(const Real dt, const Real coeA, const Real coeB, const int to,
                     }
                     idx = IndexNode(k, j, i, partn[Y], partn[X]);
                     if (0 != node[idx].did) {
-                        state = 0; /* mark domain change and boundary occurrence */
+                        state = 0; 
                         continue;
                     }
                     switch (p) {
@@ -216,7 +253,7 @@ static void LLLU(const Real dt, const Real coeA, const Real coeB, const int to,
                             break;
                     }
                     switch (state) {
-                        case 1: /* inherit numerical flux from the previous node */
+                        case 1: 
                             temp = FhatL;
                             FhatL = FhatR;
                             FhatR = temp;
@@ -224,7 +261,7 @@ static void LLLU(const Real dt, const Real coeA, const Real coeB, const int to,
                             FvhatL = FvhatR;
                             FvhatR = temp;
                             break;
-                        default: /* compute numerical flux at left interface */
+                        default: 
                             ComputeFhat(tn, s, k - h[s][Z], j - h[s][Y], i - h[s][X], partn, node, model, FhatL);
                             ComputeFvhat(tn, s, k - h[s][Z], j - h[s][Y], i - h[s][X], partn, dd, node, model, FvhatL);
                             state = 1;
@@ -233,6 +270,7 @@ static void LLLU(const Real dt, const Real coeA, const Real coeB, const int to,
                     ComputeFhat(tn, s, k, j, i, partn, node, model, FhatR);
                     ComputeFvhat(tn, s, k, j, i, partn, dd, node, model, FvhatR);
                     LU(FhatR, FhatL, FvhatR, FvhatL, Phi);
+
                     SolveOperator(model->multidim, s, coeA, coeB, node[idx].U[to], node[idx].U[tn], node[idx].U[tm], r[s], Phi);
                 }
             }
@@ -240,6 +278,7 @@ static void LLLU(const Real dt, const Real coeA, const Real coeB, const int to,
     }
     return;
 }
+
 static void LU(const Real FhatR[restrict], const Real FhatL[restrict],
         const Real FvhatR[restrict], const Real FvhatL[restrict], Real Phi[restrict])
 {
@@ -248,29 +287,33 @@ static void LU(const Real FhatR[restrict], const Real FhatL[restrict],
     }
     return;
 }
-/*
- * Solve the solution operator for time integration.
- * Note: Uo, Un, and Um are all restricted pointers. Under the condition that
- * Un and Um NEVER alias each other, Uo and Un may alias safely since they only
- * read elements and never modify any elements. Uo and Um may alias safely
- * since Uo only fetch the single element that Um modifies later.
- */
+
 static void SolveOperator(const int p, const int s, const Real coeA, const Real coeB,
         const Real Uo[restrict], const Real Un[restrict], Real Um[restrict], const Real r,
         const Real Phi[restrict])
 {
-    /* accumulation step for operator-by-operator approximation */
     if ((OPTBYOPT == p) && (X != s)) {
         for (int n = 0; n < DIMU; ++n) {
             Um[n] = Um[n] + coeB * r * Phi[n];
         }
-        return;
+    } else {
+        for (int n = 0; n < DIMU; ++n) {
+            Um[n] = coeA * Uo[n] + coeB * (Un[n] + r * Phi[n]);
+        }
     }
-    /* solve step for the solution operator */
-    for (int n = 0; n < DIMU; ++n) {
-        Um[n] = coeA * Uo[n] + coeB * (Un[n] + r * Phi[n]);
+
+    Real gamma = 1.4;
+    if (Um[0] < 1e-4) {
+        Um[0] = 1e-4;
+        Um[1] = 0.0; Um[2] = 0.0; Um[3] = 0.0;
+    }
+    Real kin_energy = 0.5 * (Um[1]*Um[1] + Um[2]*Um[2] + Um[3]*Um[3]) / Um[0];
+    Real pressure = (gamma - 1.0) * (Um[4] - kin_energy);
+
+    if (pressure < 1e-4) {
+        pressure = 1e-4;
+        Um[4] = pressure / (gamma - 1.0) + kin_energy; 
     }
     return;
 }
 /* a good practice: end file with a newline */
-

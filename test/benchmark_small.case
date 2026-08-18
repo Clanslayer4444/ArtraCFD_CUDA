@@ -1,0 +1,97 @@
+# Case Configuration for ArtraCFD Benchmark (Small, No Geometry)
+space begin
+-1.5, -3, -0.001
+3, 3, 0.001
+300, 300, 1
+space end
+time begin
+0
+10.0
+1.2
+100
+1000
+1
+time end
+numerical begin
+1
+1
+0
+0
+0
+0
+1
+numerical end
+material begin
+0
+0
+0
+0, -9.806, 0
+material end
+reference begin
+1
+1
+1
+1
+reference end
+initialization begin
+1
+0
+0
+0
+1
+initialization end
+west boundary begin
+outflow
+west boundary end
+east boundary begin
+outflow
+east boundary end
+south boundary begin
+slip wall
+-1
+south boundary end
+north boundary begin
+slip wall
+-1
+north boundary end
+front boundary begin
+outflow
+front boundary end
+back boundary begin
+outflow
+back boundary end
+plane initialization begin
+-0.5, 0, 0
+-1, 0, 0
+3.67372
+2.41981
+0
+0
+9.04545
+plane initialization end
+plane initialization begin
+-0.5, 0, 0
+1, 0, 0
+1
+0
+0
+0
+1
+plane initialization end
+# No geometry for this benchmark
+probe count begin
+2
+0
+0
+0
+probe count end
+probe control begin
+1000
+1000
+1000
+1000
+probe control end
+point probe begin
+0, -0.5, 0
+0, 0.5, 0
+point probe end

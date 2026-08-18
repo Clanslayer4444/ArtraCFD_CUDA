@@ -19,15 +19,15 @@
  * Function definitions
  ****************************************************************************/
 void ComputePhi(const int tn, const int k, const int j, const int i,
-        const int partn[restrict], const Node *const node,
-        const Model *model, Real Phi[restrict])
+        const int partn[RESTRICT], const Node *const node,
+        const Model *model, Real Phi[RESTRICT])
 {
     if (0 == model->sState) {
         memset(Phi, 0, DIMU * sizeof(*Phi));
         return;
     }
     const int idx = IndexNode(k, j, i, partn[Y], partn[X]);
-    const Real *restrict U = node[idx].U[tn];
+    const Real *RESTRICT U = node[idx].U[tn];
     const RealVec V = {U[1] / U[0], U[2] / U[0], U[3] / U[0]};
     const RealVec fb = {U[0] * model->g[X], U[0] * model->g[Y], U[0] * model->g[Z]};
     Phi[0] = 0.0;

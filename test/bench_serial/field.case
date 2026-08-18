@@ -1,0 +1,24 @@
+FORMAT
+type: ensight gold
+
+GEOMETRY
+model: field.geo
+
+VARIABLE
+scalar per node:  1  rho  field*****.rho
+scalar per node:  1    u  field*****.u
+scalar per node:  1    v  field*****.v
+scalar per node:  1    w  field*****.w
+scalar per node:  1    p  field*****.p
+scalar per node:  1    T  field*****.T
+scalar per node:  1  did  field*****.did
+vector per node:  1  Vel  field*****.Vel
+
+TIME
+time set: 1
+number of steps:          8          
+filename start number:    0
+filename increment:       1
+time values:  
+0 0.01 0.02 0.03 0.04 
+0.05 0.06 0.0625459 

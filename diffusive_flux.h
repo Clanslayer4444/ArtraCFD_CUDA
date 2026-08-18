@@ -30,8 +30,8 @@
  *      Reconstruct the numerical diffusive flux.
  */
 extern void ComputeFvhat(const int tn, const int s, const int k, const int j,
-        const int i, const int partn[restrict], const Real dd[restrict],
-        const Node *const, const Model *, Real Fvhat[restrict]);
+        const int i, const int partn[RESTRICT], const Real dd[RESTRICT],
+        const Node *const, const Model *, Real Fvhat[RESTRICT]);
 #endif
 /* a good practice: end file with a newline */
 

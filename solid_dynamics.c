@@ -28,9 +28,9 @@
 static void ApplyKinematics(const Real, const Real, Space *);
 static void ApplyCollision(Space *);
 static void DetectColState(const int, const int, const int, const int, const int,
-        const int [restrict][DIMS], const Node *const, const Partition *const,
+        const int [RESTRICT][DIMS], const Node *const, const Partition *const,
         Geometry *const);
-static void AddColObject(const int [restrict], const int, Geometry *const);
+static void AddColObject(const int [RESTRICT], const int, Geometry *const);
 static void ApplyMotion(const Real, Space *);
 /****************************************************************************
  * Function definitions
@@ -100,7 +100,7 @@ void IntegrateSurfaceForce(Space *space, const Model *model)
         for (int k = box[Z][MIN]; k < box[Z][MAX]; ++k) {
             for (int j = box[Y][MIN]; j < box[Y][MAX]; ++j) {
                 for (int i = box[X][MIN]; i < box[X][MAX]; ++i) {
-                    idx = IndexNode(k, j, i, part->n[Y], part->n[X]);
+                    idx = IndexNode(k, j, i, (part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN]), (part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN]));
                     if ((2 == node[idx].lid) && (n + 1 == node[idx].did)) {
                         ++lidN; /* an interfacial node of current geometry */
                     }
@@ -254,7 +254,7 @@ static void ApplyCollision(Space *space)
         for (int k = box[Z][MIN]; k < box[Z][MAX]; ++k) {
             for (int j = box[Y][MIN]; j < box[Y][MAX]; ++j) {
                 for (int i = box[X][MIN]; i < box[X][MAX]; ++i) {
-                    idx = IndexNode(k, j, i, part->n[Y], part->n[X]);
+                    idx = IndexNode(k, j, i, (part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN]), (part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN]));
                     if ((1 != node[idx].lid) || (p + 1 != node[idx].did)) {
                         continue;
                     }
@@ -332,7 +332,7 @@ static void ApplyCollision(Space *space)
     return;
 }
 static void DetectColState(const int k, const int j, const int i, const int did,
-        const int end, const int path[restrict][DIMS], const Node *const node,
+        const int end, const int path[RESTRICT][DIMS], const Node *const node,
         const Partition *const part, Geometry *const geo)
 {
     /* search around the specified node to find colliding objects */
@@ -345,7 +345,7 @@ static void DetectColState(const int k, const int j, const int i, const int did,
         if (!InPartBox(kh, jh, ih, part->ns[PIN])) {
             continue;
         }
-        idx = IndexNode(kh, jh, ih, part->n[Y], part->n[X]);
+        idx = IndexNode(kh, jh, ih, (part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN]), (part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN]));
         if (0 == node[idx].did) { /* a fluid node is not valid */
             continue;
         }
@@ -355,7 +355,7 @@ static void DetectColState(const int k, const int j, const int i, const int did,
     }
     return;
 }
-static void AddColObject(const int N[restrict], const int did, Geometry *const geo)
+static void AddColObject(const int N[RESTRICT], const int did, Geometry *const geo)
 {
     Collision *col = NULL;
     /* search the object list, if already exist, adjust the line of impact */

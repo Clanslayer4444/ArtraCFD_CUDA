@@ -242,6 +242,15 @@ static void ReadGeometrySettingData(Geometry *const geo)
             ++nentry;
             Sread(fp, 1, "%d", &(geo->sphN));
             Sread(fp, 1, "%d", &(geo->stlN));
+            
+            // --- THE FIX ---
+            geo->totN = geo->sphN + geo->stlN;
+            if (geo->totN > 0) {
+                geo->poly = AssignStorage(geo->totN * sizeof(*geo->poly));
+                memset(geo->poly, 0, geo->totN * sizeof(*geo->poly));
+            }
+            // ---------------
+            
             break;
         }
     }

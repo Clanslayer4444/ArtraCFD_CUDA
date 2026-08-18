@@ -103,7 +103,7 @@ static void WriteStructuredData(const Space *space, const Model *model, PvSet *p
     PvReal Vec[3] = {0.0}; /* paraview vector data */
     const Partition *const part = &(space->part);
     const Node *const node = space->node;
-    const Real *restrict U = NULL;
+    const Real *RESTRICT U = NULL;
     int idx = 0; /* linear array index math variable */
     IntVec ne = {0}; /* i, j, k node number in each part */
     ne[X] = part->ns[PIO][X][MAX] - part->ns[PIO][X][MIN] - 1;
@@ -120,7 +120,7 @@ static void WriteStructuredData(const Space *space, const Model *model, PvSet *p
         for (int k = part->ns[PIO][Z][MIN]; k < part->ns[PIO][Z][MAX]; ++k) {
             for (int j = part->ns[PIO][Y][MIN]; j < part->ns[PIO][Y][MAX]; ++j) {
                 for (int i = part->ns[PIO][X][MIN]; i < part->ns[PIO][X][MAX]; ++i) {
-                    idx = IndexNode(k, j, i, part->n[Y], part->n[X]);
+                    idx = IndexNode(k, j, i, (part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN]), (part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN]));
                     U = node[idx].U[TO];
                     switch (s) {
                         case 0: /* rho */
@@ -168,7 +168,7 @@ static void WriteStructuredData(const Space *space, const Model *model, PvSet *p
         for (int k = part->ns[PIO][Z][MIN]; k < part->ns[PIO][Z][MAX]; ++k) {
             for (int j = part->ns[PIO][Y][MIN]; j < part->ns[PIO][Y][MAX]; ++j) {
                 for (int i = part->ns[PIO][X][MIN]; i < part->ns[PIO][X][MAX]; ++i) {
-                    idx = IndexNode(k, j, i, part->n[Y], part->n[X]);
+                    idx = IndexNode(k, j, i, (part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN]), (part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN]));
                     U = node[idx].U[TO];
                     Vec[X] = U[1] / U[0];
                     Vec[Y] = U[2] / U[0];

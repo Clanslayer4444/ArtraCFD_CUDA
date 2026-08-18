@@ -1,0 +1,18 @@
+FORMAT
+type: ensight gold
+
+GEOMETRY
+model: field.geo
+
+VARIABLE
+constant per case:  Time  0
+constant per case:  Step  0
+scalar per node:     rho  field00000.rho
+scalar per node:       u  field00000.u
+scalar per node:       v  field00000.v
+scalar per node:       w  field00000.w
+scalar per node:       p  field00000.p
+scalar per node:       T  field00000.T
+scalar per node:     did  field00000.did
+vector per node:     Vel  field00000.Vel
+

@@ -13,6 +13,7 @@
  ****************************************************************************/
 #include "initialization.h"
 #include <stdio.h> /* standard library for input and output */
+#include <stdlib.h>
 #include <string.h> /* manipulating strings */
 #include "calculator.h"
 #include "computational_geometry.h"
@@ -27,14 +28,15 @@
  ****************************************************************************/
 static void InitializeSpaceData(Space *, const Model *);
 static void InitializeFieldData(Space *, const Model *);
-static void ApplyInitializer(const int, const Real [restrict],
-        Real [restrict], const Partition *const, const Model *);
+static void ApplyInitializer(const int, const Real [RESTRICT],
+        Real [RESTRICT], const Partition *const, const Model *);
 static void InitializeGeometryData(Geometry *const);
 static void WritePolyMassProperty(const Geometry *const);
 static void IdentifyGeometryState(Geometry *const);
 /****************************************************************************
  * Function definitions
  ****************************************************************************/
+/* ShowInfo-based tracking for verification (can be enabled by defining VERBOSE_INIT) */
 void InitializeComputeDomain(Time *time, Space *space, const Model *model)
 {
     if (0 == time->restart) { /* non restart */
@@ -42,9 +44,35 @@ void InitializeComputeDomain(Time *time, Space *space, const Model *model)
     } else {
         ReadData(PROSD, time, space, model);
     }
+    
+#ifdef VERBOSE_INIT
+    {
+        int total_nY = space->part.ns[PAL][Y][MAX] - space->part.ns[PAL][Y][MIN];
+        int total_nX = space->part.ns[PAL][X][MAX] - space->part.ns[PAL][X][MIN];
+        int k_cen = (space->part.ns[PIN][Z][MAX] + space->part.ns[PIN][Z][MIN]) / 2;
+        int j_cen = (space->part.ns[PIN][Y][MAX] + space->part.ns[PIN][Y][MIN]) / 2;
+        int i_cen = (space->part.ns[PIN][X][MAX] + space->part.ns[PIN][X][MIN]) / 2;
+        int cid = IndexNode(k_cen, j_cen, i_cen, total_nY, total_nX);
+        ShowInfo("  init tracker 1: density=%.6e\n", space->node[cid].U[TO][0]);
+    }
+#endif
+
     ComputeGeometryParameters(space->part.collapse, &(space->geo));
     WritePolyMassProperty(&(space->geo));
     ComputeGeometricField(space, model);
+
+#ifdef VERBOSE_INIT
+    {
+        int total_nY = space->part.ns[PAL][Y][MAX] - space->part.ns[PAL][Y][MIN];
+        int total_nX = space->part.ns[PAL][X][MAX] - space->part.ns[PAL][X][MIN];
+        int k_cen = (space->part.ns[PIN][Z][MAX] + space->part.ns[PIN][Z][MIN]) / 2;
+        int j_cen = (space->part.ns[PIN][Y][MAX] + space->part.ns[PIN][Y][MIN]) / 2;
+        int i_cen = (space->part.ns[PIN][X][MAX] + space->part.ns[PIN][X][MIN]) / 2;
+        int cid = IndexNode(k_cen, j_cen, i_cen, total_nY, total_nX);
+        ShowInfo("  init tracker 2: density=%.6e\n", space->node[cid].U[TO][0]);
+    }
+#endif
+
     TreatBoundary(TO, space, model);
     IdentifyGeometryState(&(space->geo));
     if (0 == time->restart) { /* non restart */
@@ -67,40 +95,57 @@ static void InitializeSpaceData(Space *space, const Model *model)
  */
 static void InitializeFieldData(Space *space, const Model *model)
 {
+    printf("[DEBUG] Model Params: Rho=%f, T=%f, R=%f, Gamma=%f\n", 
+            model->refRho, model->refT, model->gasR, model->gamma);
+    
     const Partition *const part = &(space->part);
     Node *const node = space->node;
-    RealVec pc = {0.0}; /* coordinates of current node */
-    int idx = 0; /* linear array index math variable */
+    RealVec pc = {0.0}; 
+    int idx = 0;
+
+    /* DYNAMIC INITIALIZATION: Using actual model struct members from commons.h */
+    const Real rho_ref = model->refRho;
+    const Real energy_ref = (model->refRho * model->gasR * model->refT) / (model->gamma - 1.0);
+
     for (int k = part->ns[PAL][Z][MIN]; k < part->ns[PAL][Z][MAX]; ++k) {
         for (int j = part->ns[PAL][Y][MIN]; j < part->ns[PAL][Y][MAX]; ++j) {
             for (int i = part->ns[PAL][X][MIN]; i < part->ns[PAL][X][MAX]; ++i) {
-                idx = IndexNode(k, j, i, part->n[Y], part->n[X]);
+                int total_nY = part->ns[PAL][Y][MAX] - part->ns[PAL][Y][MIN];
+                int total_nX = part->ns[PAL][X][MAX] - part->ns[PAL][X][MIN];
+                idx = IndexNode(k, j, i, total_nY, total_nX);
+                
                 node[idx].did = NONE;
                 node[idx].fid = NONE;
                 node[idx].lid = NONE;
                 node[idx].gst = NONE;
-                memset(node[idx].U, 1, DIMT * sizeof(*node[idx].U));
+                memset(node[idx].U, 0, DIMT * sizeof(*node[idx].U));
+
+                /* Apply dynamic defaults to ALL nodes to define the background state */
+                node[idx].U[TO][0] = rho_ref;
+                node[idx].U[TO][4] = energy_ref;
+
+                /* Only apply complex geometry logic to interior nodes */
                 if (!InPartBox(k, j, i, part->ns[PIN])) {
-                    continue;
+                    continue; 
                 }
-                /* geometric field initializer */
+                
                 node[idx].did = 0;
                 node[idx].fid = 0;
                 node[idx].lid = 0;
                 node[idx].gst = 0;
-                /* data field initializer */
+
                 pc[X] = MapPoint(i, part->domain[X][MIN], part->d[X], part->ng[X]);
                 pc[Y] = MapPoint(j, part->domain[Y][MIN], part->d[Y], part->ng[Y]);
                 pc[Z] = MapPoint(k, part->domain[Z][MIN], part->d[Z], part->ng[Z]);
+                
                 for (int n = 0; n < part->nIC; ++n) {
                     ApplyInitializer(n, pc, node[idx].U[TO], part, model);
                 }
             }
         }
     }
-    return;
 }
-static void ApplyInitializer(const int n, const Real pc[restrict], Real U[restrict],
+static void ApplyInitializer(const int n, const Real pc[RESTRICT], Real U[RESTRICT],
         const Partition *const part, const Model *model)
 {
     const Real zero = 0.0;
@@ -113,7 +158,8 @@ static void ApplyInitializer(const int n, const Real pc[restrict], Real U[restri
         ComputeExpression(&var, part->varIC[n][1]),
         ComputeExpression(&var, part->varIC[n][2]),
         ComputeExpression(&var, part->varIC[n][3]),
-        ComputeExpression(&var, part->varIC[n][4])};
+        ComputeExpression(&var, part->varIC[n][4])
+    };
     const RealVec P1P2 = {p2[X] - p1[X], p2[Y] - p1[Y], p2[Z] - p1[Z]};
     const Real l2_P1P2 = Dot(P1P2, P1P2);
     RealVec P1Pc = {pc[X] - p1[X], pc[Y] - p1[Y], pc[Z] - p1[Z]};
@@ -255,4 +301,3 @@ static void IdentifyGeometryState(Geometry *const geo)
     return;
 }
 /* a good practice: end file with a newline */
-

@@ -30,8 +30,8 @@
  *      reconstruct the numerical convective flux.
  */
 extern void ComputeFhat(const int tn, const int s, const int k, const int j,
-        const int i, const int partn[restrict], const Node *const,
-        const Model *, Real Fhat[restrict]);
+        const int i, const int partn[RESTRICT], const Node *const,
+        const Model *, Real Fhat[RESTRICT]);
 #endif
 /* a good practice: end file with a newline */
 
