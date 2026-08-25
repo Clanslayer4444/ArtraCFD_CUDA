@@ -228,8 +228,8 @@ static void EvolveSolution(Time *time, Space *space, const Model *model) {
                         ++(time->dataC);
                     }
                     WriteData(n, time, space, model);
+                    rcData[n] = 0.0;
                 }
-                rcData[n] = 0.0;
             }
         }
     }

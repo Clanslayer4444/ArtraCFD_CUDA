@@ -31,7 +31,7 @@ time begin
 0.0001                # termination time
 0.1                # CFL condition number in (0, 2]
 1                  # maximum computing steps (int; 0: auto)
-1                  # space data writing frequency (int; 0: inf)
+100                  # space data writing frequency (int; 0: inf)
 0                  # data streamer (int; 0: ParaView; 1: Ensight)
 time end
 #------------------------------------------------------------------------------
