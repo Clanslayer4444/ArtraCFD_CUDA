@@ -52,6 +52,10 @@ __device__ void MapConservative_dev(const Real gamma, const Real Uo[], Real U[])
 
 #define CFL_TPB 256
 
+cudaGraph_t graph = NULL;
+cudaGraphExec_t graphExec = NULL;
+bool graphCaptured = false;
+
 __global__ void ComputeCFL_GPU_kernel(
     int nx, int ny, int nz,
     int xmin, int xmax, int ymin, int ymax, int zmin, int zmax,
@@ -137,6 +141,8 @@ extern "C" void LaunchComputeCFL_GPU(
     }
     free(h_blockVmax);
 }
+
+
 
 __global__ void GPU_InitField_kernel(
     int nx, int ny, int nz, 
@@ -479,3 +485,36 @@ extern "C" void SendGPUBoundaryData(const Real *h_varBC) {
 extern "C" void SendGPUDomainData(const int *h_did, int Nnodes) {
     cudaMemcpy(d_did, h_did, Nnodes * sizeof(int), cudaMemcpyHostToDevice);
 }
+
+// cudaGraphExec_t fluidGraphExec = NULL;
+// bool fluidGraphCaptured = false;
+
+// extern "C" void RunFluidStepGraphed(Real dt, Space *space, const Model *model)
+// {
+//     extern void EvolveFluidDynamics(const Real dt, Space *space, const Model *model);
+
+//     cudaStreamBeginCapture(computeStream, cudaStreamCaptureModeGlobal);
+//     EvolveFluidDynamics(dt, space, model);
+//     cudaGraph_t newGraph;
+//     cudaError_t captureErr = cudaStreamEndCapture(computeStream, &newGraph);
+//     if (captureErr != cudaSuccess) {
+//         printf("[CUDA GRAPH] capture failed: %s -- falling back to direct call\n",
+//                cudaGetErrorString(captureErr));
+//         EvolveFluidDynamics(dt, space, model);
+//         return;
+//     }
+
+//     if (!fluidGraphCaptured) {
+//         cudaGraphInstantiate(&fluidGraphExec, newGraph, NULL, NULL, 0);
+//         fluidGraphCaptured = true;
+//     } else {
+//         cudaGraphExecUpdateResultInfo updateResult;
+//         cudaError_t updateErr = cudaGraphExecUpdate(fluidGraphExec, newGraph, &updateResult);
+//         if (updateErr != cudaSuccess) {
+//             cudaGraphExecDestroy(fluidGraphExec);
+//             cudaGraphInstantiate(&fluidGraphExec, newGraph, NULL, NULL, 0);
+//         }
+//     }
+//     cudaGraphDestroy(newGraph);
+//     cudaGraphLaunch(fluidGraphExec, computeStream);
+// }

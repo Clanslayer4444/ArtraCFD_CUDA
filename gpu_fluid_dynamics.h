@@ -22,6 +22,8 @@ void LaunchComputeCFL_GPU(
 int GPUFluid_Init(int Nnodes);
 void GPUFluid_Finalize(void);
 
+// void RunFluidStepGraphed(Real dt, Space *space, const Model *model);
+
 /* Data Transfer Bridges */
 void SendGPUFluidData(const Real *h_U, int Nnodes);
 void SendGPUBoundaryData(const Real *h_varBC);
